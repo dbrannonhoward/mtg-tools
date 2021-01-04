@@ -18,16 +18,18 @@ class CardEngine:
     def __init__(self, get_card_data=False,
                  get_unique_card_data=False,
                  debug=False):
+        start_time = _timer_action(start_timer=True, event='init CardEngine')
         self.cname = self.__class__.__name__
         ml.log_event('begin init {}'.format(self.cname))
         self.data = fetch_cache()
-        self.l_sha256, self.r_sha256 = _get_sha256_local(), _get_sha256_remote()
-        self.metadata_valid = _is_metadata_valid()
+        self.metadata_valid = _is_metadata_valid(local_sha256=_get_sha256_local(),
+                                                 remote_sha_256=_get_sha256_remote())
         if get_card_data:
             self.all_cards = self._get_all_cards()
             if get_unique_card_data:
-                self.all_unique_cards = filter_duplicate_cards_by_key(self.all_cards, 'name')
+                self.all_cards_with_unique_name_key = filter_duplicate_cards_by_key(self.all_cards, 'name')
         ml.log_event('end init {}'.format(self.cname))
+        _timer_action(start_timer=False, time_start=start_time, event='init CardEngine')
         if debug:
             self._debug()
 
@@ -257,23 +259,17 @@ class CardEngine:
             raise RuntimeError
 
     def _debug(self) -> None:
-        start_time = _timer_action(start_timer=True)
-        ml.log_event('start {} debug routine'.format(self.cname))
-        cards_in_set_tempest = self.get_all_cards_in_set()
-        cards_with_cmc_zero = self.get_all_cards_with_converted_mana_cost()
-        cards_with_exactly_bw = self.get_all_cards_with_exact_colors()
-        cards_with_at_least_bw = self.get_all_cards_with_colors()
-        top_500_cards = self.get_top_count_ranked_cards()
+        start_time = _timer_action(start_timer=True, event='debug CardEngine')
+        pass
         ml.log_event('end {} debug routine'.format(self.cname))
-        elapsed_time = _timer_action(start_timer=False, time_start=start_time)
-        ml.log_event('seconds for {} debug routine : to run {}'.format(self.cname, elapsed_time))
+        _timer_action(start_timer=False, time_start=start_time, event='debug CardEngine')
+        pass
 
 
 if __name__ == '__main__':
     ce = CardEngine(get_card_data=True,
                     get_unique_card_data=True,
                     debug=True)
-    pass
 else:
     print('importing {}'.format(__name__))
     ml.log_event('importing {}'.format(__name__))

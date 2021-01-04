@@ -1,4 +1,4 @@
-from card.card_engine import CardEngine
+from card.engine import CardEngine
 
 ce = CardEngine()
 pass

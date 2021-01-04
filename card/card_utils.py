@@ -46,7 +46,7 @@ def fetch_cache() -> dict:
         raise OSError
 
 
-def filter_duplicate_cards_by_key(card_pool: dict, key: str) -> dict:
+def filter_duplicate_cards_by_key(card_pool: dict, key='name') -> dict:
     """
     :param card_pool: a CardPool dictionary containing MagicCard dictionaries
     :param key: a dictionary key used to filter multiple values with the same key
@@ -211,13 +211,12 @@ def _get_sha256_remote() -> str:
         raise UnicodeError
 
 
-def _is_metadata_valid() -> bool:
+def _is_metadata_valid(local_sha256='', remote_sha_256='') -> bool:
     """
     :return: boolean, False if json data is out-of-date
     """
     ml.log_event('check metadata validity')
-    l_sha256 = _get_sha256_local()
-    r_sha256 = _get_sha256_remote()
+    l_sha256, r_sha256 = local_sha256, remote_sha_256
     try:
         mcache = str(Path(DATA_PATH, MCACHE))
         if not exists(mcache):
@@ -247,19 +246,18 @@ def _sanitize_colors(color_string: str) -> str:
     return sanitized_string
 
 
-def _timer_action(start_timer: bool, time_start=None):
+def _timer_action(start_timer: bool, time_start=None, event=''):
     try:
         if start_timer:
-            time_start = float(perf_counter())
+            time_start = round(float(perf_counter()), 3)
             time_stop = None
         else:
             time_start = time_start
-            time_stop = float(perf_counter())
+            time_stop = round(float(perf_counter()), 3)
         if time_start and time_stop:
             time_elapsed = time_stop - time_start
-            ml.log_event('stop time is {}'.format(time_stop))
-            ml.log_event('total time is {}'.format(time_elapsed))
-            return time_elapsed
+            ml.log_event('{} elapsed_time : {}'.format(event, time_elapsed))
+        ml.log_event('timer started for {}'.format(event))
         return time_start
     except TypeError:
         raise TypeError
