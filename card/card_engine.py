@@ -1,14 +1,8 @@
 from alive_progress import alive_bar
 from card_utils import *
-from data_src.CONSTANTS import MCACHE, DATA_PATH
-from decimal import Decimal
 from decimal import getcontext
 from minimalog.minimal_log import MinimalLog
-from os import mknod
-from os.path import exists
-from pathlib2 import Path
 from string import digits
-from timeit import default_timer
 getcontext().prec = 4
 ml = MinimalLog()
 
@@ -18,10 +12,67 @@ class CardEngine:
         self.cname = self.__class__.__name__
         ml.log_event('begin init {}'.format(self.cname))
         self.l_sha256, self.r_sha256 = '', ''
-        self.data, self.l_sha256 = fetch_cache_and_local_sha()
-        self.metadata_valid = self._is_metadata_valid()
+        self.data = fetch_cache()
+        self.metadata_valid = is_metadata_valid()
         self.all_cards = self._get_all_cards()
         ml.log_event('end init {}'.format(self.cname))
+
+    def _count_all_cards(self) -> int:
+        """
+        :return: a count of all cards in magic the gathering, with no uniqueness checking
+        """
+        try:
+            return self._count_len_of_return(self._count_all_cards)
+        except RuntimeError:
+            raise RuntimeError
+
+    def _count_all_cards_in_set(self, *args) -> int:
+        """
+        :param args: set name string
+        :return: count of cards in set
+        """
+        try:
+            return self._count_len_of_return(self._count_all_cards_in_set, *args)
+        except Exception:
+            raise Exception
+
+    def _count_all_cards_with_colors(self, *args) -> int:
+        """
+        :param args: a list of colors
+        :return: a count of all cards sharing all of the colors, exclusive
+        """
+        try:
+            return self._count_len_of_return(self._get_all_cards_with_exact_colors, *args)
+        except RuntimeError:
+            raise RuntimeError
+
+    def _count_all_cards_with_converted_mana_cost(self, *args):
+        """
+        :param args: converted mana cost, an integer
+        :return: count of all cards with that converted mana cost, not filtered for uniqueness
+        """
+        return self._count_len_of_return(self._get_all_cards_with_converted_mana_cost, *args)
+
+    @staticmethod
+    def _count_len_of_return(function_that_returns_object_with_length, *args) -> int:
+        """
+        :param function_that_returns_object_with_length: a function that returns a countable
+        :param args: any input arguments that function may need
+        :return: the length of the passed function's return
+        """
+        return len(function_that_returns_object_with_length(*args))
+
+    def _debug(self) -> None:
+        pass
+
+    @staticmethod
+    def _filter_duplicate_cards_by_key(cards: list, key: str) -> list:
+        unique_card_names = list()
+        for card in cards:
+            if card[key] not in unique_card_names:
+                # ml.log_event('unique card {} found'.format(card[key]))
+                unique_card_names.append(card[key])
+        return unique_card_names
 
     def _get_all_cards(self) -> dict:
         ml.log_event('get all cards')
@@ -39,60 +90,96 @@ class CardEngine:
                 sorted_card_dict[k] = v
         return sorted_card_dict
 
-    def _get_all_cards_belonging_to_color_variation(self, search_color_variation: str,
-                                                    search_pool=None, only_count=False):
-        ml.log_event('get all cards belonging to color variation {}'.format(search_color_variation))
-        list_of_cards_with_color_variation = list()
-        # TODO move to engine
+    def _get_all_cards_with_colors(self, colors: str, search_pool=None) -> list:
+        """
+        :param colors: a color variation string, for example: 'BW' for 'black and white'
+        :param search_pool: a user-specified list() of card object dict() through which to apply this search
+        :return: a list() of card object dict()
+        """
+        ml.log_event('get all cards that have at least color variation {}'.format(colors))
+        list_of_cards_with_colors = list()
+        colors = sanitize_colors(colors)
         if search_pool is None:
             ml.log_event('no search pool provided, starting')
             try:
                 for card_id in self.all_cards:
-                    card_color_variation = \
+                    card_color = \
                         convert_list_of_strings_to_alphabetical_string(self.all_cards[card_id].get('colors'))
-                    if search_color_variation == card_color_variation:
-                        list_of_cards_with_color_variation.append(self.all_cards[card_id])
-                if only_count:
-                    return int(len(list_of_cards_with_color_variation))
-                return list_of_cards_with_color_variation
+                    if card_contains_all_colors(card_color, colors):
+                        # ml.log_event('inclusive search color {} matches card color {}'.format(colors, card_color))
+                        list_of_cards_with_colors.append(self.all_cards[card_id])
+                return list_of_cards_with_colors
+            except RuntimeError:
+                raise RuntimeError
+        ml.log_event('search pool provided, starting')
+        try:
+            for card_id in search_pool:
+                card_color = \
+                    convert_list_of_strings_to_alphabetical_string(self.all_cards[card_id].get('colors'))
+                if card_contains_all_colors(card_color, colors):
+                    # ml.log_event('inclusive search color {} matches card color {}'.format(colors, card_color))
+                    list_of_cards_with_colors.append(self.all_cards[card_id])
+            return list_of_cards_with_colors
+        except RuntimeError:
+            raise RuntimeError
+
+    def _get_all_cards_with_exact_colors(self, colors: str, search_pool=None) -> list:
+        """
+        :param colors: a color variation string, for example: 'BW' for 'black and white'
+        :param search_pool: a user-specified list() of card object dict() through which to apply this search
+        :return: a list() of card object dict()
+        """
+        ml.log_event('get all cards belonging to color variation {}'.format(colors))
+        list_of_cards_with_colors = list()
+        colors = sanitize_colors(colors)
+        if search_pool is None:
+            ml.log_event('no search pool provided, starting')
+            try:
+                for card_id in self.all_cards:
+                    card_color = \
+                        convert_list_of_strings_to_alphabetical_string(self.all_cards[card_id].get('colors'))
+                    if colors == card_color:
+                        # ml.log_event('exclusive search color {} matches card color {}'.format(colors, card_color))
+                        list_of_cards_with_colors.append(self.all_cards[card_id])
+                return list_of_cards_with_colors
             except RuntimeError:
                 raise RuntimeError
         try:
             ml.log_event('search pool provided, starting')
             list_of_cards_in_search_pool_with_color_variation = list()
             for card_id in search_pool:
-                card_color_variation = \
+                card_color = \
                     convert_list_of_strings_to_alphabetical_string(self.all_cards[card_id].get('colors'))
-                if search_color_variation == card_color_variation:
+                if colors == card_color:
+                    # ml.log_event('exclusive search color {} matches card color {}'.format(colors, card_color))
                     list_of_cards_in_search_pool_with_color_variation.append(self.all_cards[card_id])
-            if only_count:
-                return int(len(list_of_cards_in_search_pool_with_color_variation))
             return list_of_cards_in_search_pool_with_color_variation
         except RuntimeError:
             raise RuntimeError
 
-    def _get_all_cards_belonging_to_set(self, set_name_to_find: str, only_count=False):
-        ml.log_event('get all cards belonging to set {}'.format(set_name_to_find))
-        # TODO move to engine
+    def _get_all_cards_in_set(self, set_name: str) -> list:
+        """
+        :param set_name: find cards in set_name
+        :return: cards in set_name
+        """
+        ml.log_event('get all cards belonging to set {}'.format(set_name))
         cards_belonging_to_set = list()
-        set_id = self._get_id_from_set_name(set_name_to_find)
-        if set_id:
-            for card in self.data['data'][set_id]['cards']:
-                cards_belonging_to_set.append(card)
-            if only_count:
-                return len(cards_belonging_to_set)
-            return cards_belonging_to_set
-        return None
+        set_id = self._get_id_from_set_name(set_name)
+        try:
+            if set_id:
+                for card in self.data['data'][set_id]['cards']:
+                    cards_belonging_to_set.append(card)
+                return cards_belonging_to_set
+        except RuntimeError:
+            raise RuntimeError
 
-    def _get_all_cards_with_converted_mana_cost(self, cmc: int, only_count=False):
+    def _get_all_cards_with_converted_mana_cost(self, cmc: int) -> list:
         ml.log_event('getting all cards with cmc {}'.format(cmc))
         cards_with_search_cmc = list()
         for card_id in self.all_cards.keys():
             mana_cost = self._process_mana_cost(self.all_cards[card_id].get('manaCost'))
             if mana_cost == cmc:
                 cards_with_search_cmc.append(self.all_cards[card_id])
-        if only_count:
-            return len(cards_with_search_cmc)
         return cards_with_search_cmc
 
     def _get_all_unique_color_variations(self) -> list:
@@ -154,28 +241,9 @@ class CardEngine:
             if id_to_convert == set_id:
                 return self.data['data'][set_id]['name']
 
-    def _is_metadata_valid(self) -> bool:
-        ml.log_event('check metadata validity')
-        self.r_sha256 = get_sha256_remote()
-        try:
-            mcache = str(Path(DATA_PATH, MCACHE))
-            if not exists(mcache):
-                try:
-                    mknod(path=mcache)
-                except OSError:
-                    raise OSError
-                generate_mcache()
-            if not self.r_sha256 and self.l_sha256:
-                return False
-            if not self.r_sha256 == self.l_sha256:
-                return False
-            return True
-        except OSError:
-            raise OSError
-
     @staticmethod
     def _process_mana_cost(mana_string) -> int:
-        ml.log_event('processing mana cost for {}'.format(mana_string))
+        # ml.log_event('processing mana cost for {}'.format(mana_string))
         mana_sum = 0
         try:
             if mana_string is None:
@@ -193,5 +261,7 @@ class CardEngine:
 
 if __name__ == '__main__':
     ce = CardEngine()
+    ce._debug()
 else:
-    print('importing ' + __name__)
+    print('importing {}'.format(__name__))
+    ml.log_event('importing {}'.format(__name__))
