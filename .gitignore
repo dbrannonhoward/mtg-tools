@@ -1,10 +1,16 @@
 # extensions to ignore
+*.json
+*.log
+*.pyc
 
 
 # files to ignore
 # .gitignore
+minimalog
 
 
 # folders to ignore
 .idea/
+data_src/
+spiders/
 venv*/
