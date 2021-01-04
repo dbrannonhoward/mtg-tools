@@ -16,20 +16,22 @@ ml = MinimalLog()
 
 
 class CardEngine:
-    def __init__(self):
+    def __init__(self, get_card_data=False, get_unique_card_data=False):
         self.cname = self.__class__.__name__
         ml.log_event('begin init {}'.format(self.cname))
         self.l_sha256, self.r_sha256 = _get_sha256_local(), _get_sha256_remote()
-        self.data = fetch_cache()
         self.metadata_valid = _is_metadata_valid()
-        self.all_cards = self._get_all_cards()
-        self.all_unique_cards = filter_duplicate_cards_by_key(self.all_cards, 'name')
+        self.data = fetch_cache()
+        if get_card_data:
+            self.all_cards = self._get_all_cards()
+            if get_unique_card_data:
+                self.all_unique_cards = filter_duplicate_cards_by_key(self.all_cards, 'name')
         ml.log_event('end init {}'.format(self.cname))
 
     def get_all_cards_in_set(self, card_pool=None, set_name='') -> dict:
         """
-        :param card_pool:
-        :param set_name:
+        :param card_pool: custom dictionary created from online json object
+        :param set_name: a set name from magic the gathering
         :return:
         """
         ml.log_event('get all cards belonging to set {}'.format(set_name))
@@ -53,8 +55,8 @@ class CardEngine:
 
     def get_all_cards_with_colors(self, card_pool=None, colors='BW') -> dict:
         """
-        :param card_pool:
-        :param colors:
+        :param card_pool: custom dictionary created from online json object
+        :param colors: a combination of colors from magic the gathering
         :return:
         """
         ml.log_event('get all cards that have at least color variation {}'.format(colors))
@@ -80,8 +82,8 @@ class CardEngine:
 
     def get_all_cards_with_converted_mana_cost(self, card_pool=None, cmc=0) -> dict:
         """
-        :param card_pool:
-        :param cmc:
+        :param card_pool: custom dictionary created from online json object
+        :param cmc: a 'total mana cost' from magic the gathering
         :return:
         """
         ml.log_event('getting all cards with cmc {}'.format(cmc))
@@ -104,8 +106,8 @@ class CardEngine:
 
     def get_all_cards_with_exact_colors(self, card_pool=None, colors='BW') -> dict:
         """
-        :param card_pool:
-        :param colors:
+        :param card_pool: custom dictionary created from online json object
+        :param colors: a combination of colors from magic the gathering
         :return:
         """
         ml.log_event('get all cards belonging to color variation {}'.format(colors))
@@ -131,8 +133,8 @@ class CardEngine:
 
     def get_top_count_ranked_cards(self, card_pool=None, count=100) -> dict:
         """
-        :param card_pool:
-        :param count:
+        :param card_pool: custom dictionary created from online json object
+        :param count: the number of cards to fetch, each number corresponding to rank
         :return:
         """
         ml.log_event('searching for top {} ranked cards'.format(count))
@@ -159,7 +161,7 @@ class CardEngine:
         except RuntimeError:
             raise RuntimeError
 
-    def _get_all_cards(self) -> dict:
+    def _get_all_cards(self, sort_dict_before_return=False) -> dict:
         """
         :return:
         """
@@ -172,15 +174,16 @@ class CardEngine:
                     card_dict[card['name'] + delimiter +
                               card['setCode'] + delimiter +
                               card['uuid']] = card
-            for k, v in sorted(card_dict.items()):
-                sorted_card_dict[k] = v
-            return sorted_card_dict
+            if sort_dict_before_return:
+                for k, v in sorted(card_dict.items()):
+                    card_dict[k] = v
+            return card_dict
         except RuntimeError:
             raise RuntimeError
 
     def _get_all_possible_color_combinations(self) -> list:
         """
-        :return:
+        :return: all color combinations in magic the gathering associated with at least one card
         """
         ml.log_event('get all unique color variations')
         unique_color_variations = list()
@@ -197,7 +200,7 @@ class CardEngine:
 
     def _get_id_from_set_name(self, set_name_to_convert: str) -> str:
         """
-        :param set_name_to_convert:
+        :param set_name_to_convert: a set name from magic the gathering
         :return:
         """
         ml.log_event('get id for set name {}'.format(set_name_to_convert))
@@ -211,7 +214,7 @@ class CardEngine:
 
     def _get_list_of_set_ids(self) -> list:
         """
-        :return:
+        :return: a list of all set ids present in the json file, a set id corresponds to a set name
         """
         ml.log_event('get list of set ids')
         list_of_set_ids = list()
@@ -224,7 +227,7 @@ class CardEngine:
 
     def _get_set_name_from_id(self, id_to_convert: str) -> str:
         """
-        :param id_to_convert:
+        :param id_to_convert: a set id, great parameter for starting a search in the present json format
         :return:
         """
         ml.log_event('get set name from id {}'.format(id_to_convert))
