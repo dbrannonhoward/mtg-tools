@@ -6,11 +6,84 @@ from os import mknod
 from os.path import exists
 from pathlib2 import Path
 from minimalog.minimal_log import MinimalLog
+from string import digits
 from urllib.request import Request, urlopen
 ml = MinimalLog(__name__)
 
 
-def card_contains_all_colors(card_color: str, colors: str) -> bool:
+def count_len_of_input_function_return(func_returns_countable, *args) -> int:
+    """
+    :param func_returns_countable: a function that returns a countable
+    :param args: any input arguments passed function needs
+    :return: the length of the passed function's return
+    """
+    return len(func_returns_countable(*args))
+
+
+def fetch_cache() -> dict:
+    ml.log_event('fetch cache and local sha256')
+    try:
+        with open(str(Path(DATA_PATH, CACHE))) as c:
+            ml.log_event('success! probably!')
+            return loads(c.read())
+    except OSError:
+        raise OSError
+
+
+def filter_duplicate_cards_by_key(cards: dict, key: str) -> dict:
+    unique_card_names = dict()
+    try:
+        for card_id in cards:
+            card_value_at_key = cards[card_id][key]
+            if card_value_at_key not in unique_card_names.keys():
+                unique_card_names[card_value_at_key] = cards[card_id]
+        return unique_card_names
+    except RuntimeError:
+        raise RuntimeError
+
+
+def generate_mcache():
+    ml.log_event('TODO generating mcache')
+    # TODO FUTURE create mcache file, define data extraction, extract from large dict, write to mcache
+    pass
+
+
+def get_cache_date(cache) -> str:
+    ml.log_event('get cache date')
+    try:
+        cache_date = cache['meta']['date']
+        return cache_date
+    except RuntimeError:
+        raise RuntimeError
+
+
+def get_cache_version(cache) -> str:
+    ml.log_event('get cache version')
+    try:
+        cache_date = cache['meta']['version']
+        return cache_date
+    except RuntimeError:
+        raise RuntimeError
+
+
+def process_mana_cost(mana_string) -> int:
+    # ml.log_event('processing mana cost for {}'.format(mana_string))
+    mana_sum = 0
+    try:
+        if mana_string is None:
+            return mana_sum
+        mana_string = mana_string.replace('{', '').replace('}', '')
+        for element in mana_string:
+            if element not in digits:
+                mana_sum += 1
+                continue
+            mana_sum += int(element)
+        return mana_sum
+    except ArithmeticError:
+        raise ArithmeticError
+
+
+def _card_contains_all_colors(card_color: str, colors: str) -> bool:
     c, cc = colors, card_color
     try:
         for color in colors:
@@ -25,14 +98,14 @@ def card_contains_all_colors(card_color: str, colors: str) -> bool:
         raise IndexError
 
 
-def convert_list_of_strings_to_alphabetical_string(list_of_strings: list) -> str:
+def _convert_list_of_strings_to_alphabetical_string(list_of_strings: list) -> str:
     try:
         return ''.join(sorted(list_of_strings))
     except IndexError:
         raise IndexError
 
 
-def decimal_difference(start_time: str, stop_time: str) -> Decimal:
+def _decimal_difference(start_time: str, stop_time: str) -> Decimal:
     ml.log_event('taking decimal difference of {} from {}'.format(stop_time, start_time))
     try:
         dec_start = Decimal(start_time)
@@ -42,23 +115,7 @@ def decimal_difference(start_time: str, stop_time: str) -> Decimal:
         raise ValueError
 
 
-def fetch_cache() -> dict:
-    ml.log_event('fetch cache and local sha256')
-    try:
-        with open(str(Path(DATA_PATH, CACHE))) as c:
-            ml.log_event('success! probably!')
-            return loads(c.read())
-    except OSError:
-        raise OSError
-
-
-def generate_mcache():
-    ml.log_event('TODO generating mcache')
-    # TODO FUTURE create mcache file, define data extraction, extract from large dict, write to mcache
-    pass
-
-
-def get_sha256_local() -> str:
+def _get_sha256_local() -> str:
     ml.log_event('get local sha256')
     if DEBUG:
         ml.log_event('debug mode, skipping local hash check')
@@ -69,7 +126,7 @@ def get_sha256_local() -> str:
         return checksum
 
 
-def get_sha256_remote() -> str:
+def _get_sha256_remote() -> str:
     ml.log_event('get remote sha256')
     if DEBUG:
         ml.log_event('debug mode, skipping remote hash fetch')
@@ -86,10 +143,10 @@ def get_sha256_remote() -> str:
         raise UnicodeError
 
 
-def is_metadata_valid() -> bool:
+def _is_metadata_valid() -> bool:
     ml.log_event('check metadata validity')
-    l_sha256 = get_sha256_local()
-    r_sha256 = get_sha256_remote()
+    l_sha256 = _get_sha256_local()
+    r_sha256 = _get_sha256_remote()
     try:
         mcache = str(Path(DATA_PATH, MCACHE))
         if not exists(mcache):
@@ -108,7 +165,7 @@ def is_metadata_valid() -> bool:
         raise OSError
 
 
-def sanitize_colors(color_string: str) -> str:
+def _sanitize_colors(color_string: str) -> str:
     """
     :param color_string: a string, potentially from a user
     :return: remove non-alpha, remove duplicates, alphabetize, and uppercase

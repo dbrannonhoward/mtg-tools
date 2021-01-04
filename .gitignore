@@ -6,11 +6,11 @@
 
 # files to ignore
 # .gitignore
+CONSTANTS.py
 minimalog
 
 
 # folders to ignore
 .idea/
-data_src/
 spiders/
 venv*/
