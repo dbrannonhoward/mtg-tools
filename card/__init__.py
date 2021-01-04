@@ -1,1 +1,1 @@
-print('importing ' + __name__)
+print('importing {}'.format(__name__))

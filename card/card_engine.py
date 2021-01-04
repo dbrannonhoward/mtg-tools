@@ -9,26 +9,29 @@ from card_utils import _get_sha256_local
 from card_utils import _get_sha256_remote
 from card_utils import _is_metadata_valid
 from card_utils import _sanitize_colors
-from decimal import getcontext
+from card_utils import _timer_action
 from minimalog.minimal_log import MinimalLog
-getcontext().prec = 4
 ml = MinimalLog()
 
 
 class CardEngine:
-    def __init__(self, get_card_data=False, get_unique_card_data=False):
+    def __init__(self, get_card_data=False,
+                 get_unique_card_data=False,
+                 debug=False):
         self.cname = self.__class__.__name__
         ml.log_event('begin init {}'.format(self.cname))
+        self.data = fetch_cache()
         self.l_sha256, self.r_sha256 = _get_sha256_local(), _get_sha256_remote()
         self.metadata_valid = _is_metadata_valid()
-        self.data = fetch_cache()
         if get_card_data:
             self.all_cards = self._get_all_cards()
             if get_unique_card_data:
                 self.all_unique_cards = filter_duplicate_cards_by_key(self.all_cards, 'name')
         ml.log_event('end init {}'.format(self.cname))
+        if debug:
+            self._debug()
 
-    def get_all_cards_in_set(self, card_pool=None, set_name='') -> dict:
+    def get_all_cards_in_set(self, card_pool=None, set_name='Tempest') -> dict:
         """
         :param card_pool: custom dictionary created from online json object
         :param set_name: a set name from magic the gathering
@@ -48,6 +51,7 @@ class CardEngine:
             for card_id in card_pool:
                 if set_id in card_id:
                     # TODO bug, false positive returns if card name contains set_id anywhere
+                    ml.log_event('{} found for set_name {}'.format(card_id, set_name))
                     cards_in_set[card_id] = card_pool[card_id]
             return cards_in_set
         except RuntimeError:
@@ -74,7 +78,7 @@ class CardEngine:
                 card_color = \
                     _convert_list_of_strings_to_alphabetical_string(card_pool[card_id].get('colors'))
                 if _card_contains_all_colors(card_color, colors):
-                    # ml.log_event('inclusive search color {} matches card color {}'.format(colors, card_color))
+                    ml.log_event('card id {} found with colors {}'.format(card_id, colors))
                     cards_with_colors[card_id] = card_pool[card_id]
             return cards_with_colors
         except RuntimeError:
@@ -99,6 +103,7 @@ class CardEngine:
             for card_id in card_pool.keys():
                 mana_cost = process_mana_cost(card_pool[card_id].get('manaCost'))
                 if mana_cost == cmc:
+                    ml.log_event('card {} found with cmc {}'.format(card_id, cmc))
                     cards_with_cmc[card_id] = card_pool[card_id]
             return cards_with_cmc
         except RuntimeError:
@@ -125,13 +130,13 @@ class CardEngine:
                 card_color = \
                     _convert_list_of_strings_to_alphabetical_string(card_pool[card_id].get('colors'))
                 if colors == card_color:
-                    # ml.log_event('exclusive search color {} matches card color {}'.format(colors, card_color))
+                    ml.log_event('card {} found with exact color(s) {}'.format(card_id, colors))
                     cards_matching_color[card_id] = card_pool[card_id]
             return cards_matching_color
         except RuntimeError:
             raise RuntimeError
 
-    def get_top_count_ranked_cards(self, card_pool=None, count=100) -> dict:
+    def get_top_count_ranked_cards(self, card_pool=None, count=500) -> dict:
         """
         :param card_pool: custom dictionary created from online json object
         :param count: the number of cards to fetch, each number corresponding to rank
@@ -153,7 +158,7 @@ class CardEngine:
                     edhrec_rank = card_pool[card_id].get('edhrecRank')
                     if 0 < edhrec_rank < count + 1:
                         if edhrec_rank not in ranks_found:
-                            ml.log_event('found card {} at rank {}'.format(card_pool[card_id]['name'], edhrec_rank))
+                            ml.log_event('card id {} found at rank {}'.format(card_id, edhrec_rank))
                             ranks_found.append(edhrec_rank)
                             top_ranked_cards[card_id] = card_pool[card_id]
                             continue
@@ -181,7 +186,7 @@ class CardEngine:
         except RuntimeError:
             raise RuntimeError
 
-    def _get_all_possible_color_combinations(self) -> list:
+    def _get_all_possible_color_combinations(self, sort_variations_before_return=False) -> list:
         """
         :return: all color combinations in magic the gathering associated with at least one card
         """
@@ -193,7 +198,9 @@ class CardEngine:
                     _convert_list_of_strings_to_alphabetical_string(self.all_cards[card_id]['colors'])
                 if card_color_variation not in unique_color_variations:
                     unique_color_variations.append(card_color_variation)
-            unique_color_variations.sort()
+                    ml.log_event('new color variation {} found on card_id {}'.format(card_color_variation, card_id))
+            if sort_variations_before_return:
+                unique_color_variations.sort()
             return unique_color_variations
         except IndexError:
             raise IndexError
@@ -208,7 +215,11 @@ class CardEngine:
             for set_id in self.data['data'].keys():
                 set_name_for_id = self.data['data'][set_id].get('mcmName')
                 if set_name_to_convert == set_name_for_id:
+                    ml.log_event('set_id {} found for {}'.format(set_id, set_name_to_convert))
                     return set_id
+            set_id = ''
+            ml.log_event('no set_id found for {}'.format(set_name_to_convert), level=ml.WARN)
+            return set_id
         except IndexError:
             raise IndexError
 
@@ -220,7 +231,9 @@ class CardEngine:
         list_of_set_ids = list()
         try:
             for set_id in self.data['data'].keys():
+                ml.log_event('fetched set_id {} from cache'.format(set_id))
                 list_of_set_ids.append(set_id)
+            ml.log_event('returning list {} of set_ids'.format(list_of_set_ids))
             return list_of_set_ids
         except RuntimeError:
             raise RuntimeError
@@ -234,17 +247,33 @@ class CardEngine:
         try:
             for set_id in self.data['data'].keys():
                 if id_to_convert == set_id:
-                    return self.data['data'][set_id]['name']
+                    set_name = self.data['data'][set_id]['name']
+                    ml.log_event('set name {} found for set_id {}'.format(set_name, id_to_convert))
+                    return set_name
+            ml.log_event('no set name found for set_id {}'.format(id_to_convert))
+            set_name = ''
+            return set_name
         except RuntimeError:
             raise RuntimeError
 
-    def debug(self) -> None:
-        pass
+    def _debug(self) -> None:
+        start_time = _timer_action(start_timer=True)
+        ml.log_event('start {} debug routine'.format(self.cname))
+        cards_in_set_tempest = self.get_all_cards_in_set()
+        cards_with_cmc_zero = self.get_all_cards_with_converted_mana_cost()
+        cards_with_exactly_bw = self.get_all_cards_with_exact_colors()
+        cards_with_at_least_bw = self.get_all_cards_with_colors()
+        top_500_cards = self.get_top_count_ranked_cards()
+        ml.log_event('end {} debug routine'.format(self.cname))
+        elapsed_time = _timer_action(start_timer=False, time_start=start_time)
+        ml.log_event('seconds for {} debug routine : to run {}'.format(self.cname, elapsed_time))
 
 
 if __name__ == '__main__':
-    ce = CardEngine()
-    ce.debug()
+    ce = CardEngine(get_card_data=True,
+                    get_unique_card_data=True,
+                    debug=True)
+    pass
 else:
     print('importing {}'.format(__name__))
     ml.log_event('importing {}'.format(__name__))

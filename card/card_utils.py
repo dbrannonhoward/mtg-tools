@@ -1,5 +1,5 @@
 from data_src.CONSTANTS import CACHE, CACHE_SHA_URL, DATA_PATH, DEBUG, FIREFOX_HEADER, MCACHE
-from decimal import Decimal
+from decimal import Decimal, getcontext
 from hashlib import sha256
 from json import loads
 from os import mknod
@@ -7,7 +7,10 @@ from os.path import exists
 from pathlib2 import Path
 from minimalog.minimal_log import MinimalLog
 from string import digits
+from sys import exit
+from time import perf_counter
 from urllib.request import Request, urlopen
+getcontext().prec = 4  # TODO Decimal not used
 ml = MinimalLog(__name__)
 
 
@@ -32,9 +35,13 @@ def fetch_cache() -> dict:
     """
     ml.log_event('fetch cache and local sha256')
     try:
-        with open(str(Path(DATA_PATH, CACHE))) as c:
-            ml.log_event('success! probably!')
-            return loads(c.read())
+        cache_src = str(Path(DATA_PATH, CACHE))
+        if exists(cache_src):
+            with open(cache_src) as cs:
+                ml.log_event('success! probably!')
+                return loads(cs.read())
+        ml.log_event('cache {} not found, exiting python'.format(cache_src))
+        exit()
     except OSError:
         raise OSError
 
@@ -238,6 +245,24 @@ def _sanitize_colors(color_string: str) -> str:
         ''.join(sorted(''.join(set(''.join([letter for letter in color_string if letter.isalpha()]))).upper()))
     # ml.log_event('color string {} sanitized to {}'.format(color_string, sanitized_string))
     return sanitized_string
+
+
+def _timer_action(start_timer: bool, time_start=None):
+    try:
+        if start_timer:
+            time_start = float(perf_counter())
+            time_stop = None
+        else:
+            time_start = time_start
+            time_stop = float(perf_counter())
+        if time_start and time_stop:
+            time_elapsed = time_stop - time_start
+            ml.log_event('stop time is {}'.format(time_stop))
+            ml.log_event('total time is {}'.format(time_elapsed))
+            return time_elapsed
+        return time_start
+    except TypeError:
+        raise TypeError
 
 
 print('importing {}'.format(__name__))
