@@ -11,16 +11,25 @@ from urllib.request import Request, urlopen
 ml = MinimalLog(__name__)
 
 
-def count_len_of_input_function_return(func_returns_countable, *args) -> int:
+def card_pool_is_dict(card_pool) -> bool:
     """
-    :param func_returns_countable: a function that returns a countable
-    :param args: any input arguments passed function needs
-    :return: the length of the passed function's return
+    :param card_pool: an object that needs to be verified as a dict
+    :return: True if card_pool is dict
     """
-    return len(func_returns_countable(*args))
+    ml.log_event('verifying card pool is dict')
+    try:
+        if isinstance(card_pool, dict):
+            ml.log_event('success!')
+            return True
+        return False
+    except TypeError:
+        raise TypeError
 
 
 def fetch_cache() -> dict:
+    """
+    :return: a json object read from disk into a dict
+    """
     ml.log_event('fetch cache and local sha256')
     try:
         with open(str(Path(DATA_PATH, CACHE))) as c:
@@ -30,25 +39,40 @@ def fetch_cache() -> dict:
         raise OSError
 
 
-def filter_duplicate_cards_by_key(cards: dict, key: str) -> dict:
+def filter_duplicate_cards_by_key(card_pool: dict, key: str) -> dict:
+    """
+    :param card_pool: a CardPool dictionary containing MagicCard dictionaries
+    :param key: a dictionary key used to filter multiple values with the same key
+    :return: a CardPool dictionary containing MagicCard dictionaries
+    """
+    # TODO bug, removal is arbitrary, with the first match taking precedence
     unique_card_names = dict()
+    temp_uniques = list()
     try:
-        for card_id in cards:
-            card_value_at_key = cards[card_id][key]
-            if card_value_at_key not in unique_card_names.keys():
-                unique_card_names[card_value_at_key] = cards[card_id]
+        for card_id in card_pool:
+            card_value_at_key = card_pool[card_id][key]
+            if card_value_at_key not in temp_uniques:
+                temp_uniques.append(card_value_at_key)
+                unique_card_names[card_id] = card_pool[card_id]
         return unique_card_names
     except RuntimeError:
         raise RuntimeError
 
 
 def generate_mcache():
+    """
+    :return: TODO
+    """
     ml.log_event('TODO generating mcache')
     # TODO FUTURE create mcache file, define data extraction, extract from large dict, write to mcache
     pass
 
 
 def get_cache_date(cache) -> str:
+    """
+    :param cache: data read from disk
+    :return: a dictionary entry containing cache date
+    """
     ml.log_event('get cache date')
     try:
         cache_date = cache['meta']['date']
@@ -58,6 +82,10 @@ def get_cache_date(cache) -> str:
 
 
 def get_cache_version(cache) -> str:
+    """
+    :param cache: data read from disk
+    :return: a dictionary entry containing cache version
+    """
     ml.log_event('get cache version')
     try:
         cache_date = cache['meta']['version']
@@ -66,7 +94,20 @@ def get_cache_version(cache) -> str:
         raise RuntimeError
 
 
+def get_len_of_object(func_returns_countable, *args) -> int:
+    """
+    :param func_returns_countable: a function that returns a countable object
+    :param args: optional args that can be passed with func_returns_countable
+    :return: number of elements in func_returns_countable's return
+    """
+    return len(func_returns_countable(*args))
+
+
 def process_mana_cost(mana_string) -> int:
+    """
+    :param mana_string: a string representing a card's mana cost
+    :return: a raw mana total
+    """
     # ml.log_event('processing mana cost for {}'.format(mana_string))
     mana_sum = 0
     try:
@@ -84,6 +125,11 @@ def process_mana_cost(mana_string) -> int:
 
 
 def _card_contains_all_colors(card_color: str, colors: str) -> bool:
+    """
+    :param card_color: the colors of the card
+    :param colors: the colors the user has requested
+    :return: True if the colors the user has requested are ALL present in colors of the card
+    """
     c, cc = colors, card_color
     try:
         for color in colors:
@@ -99,13 +145,22 @@ def _card_contains_all_colors(card_color: str, colors: str) -> bool:
 
 
 def _convert_list_of_strings_to_alphabetical_string(list_of_strings: list) -> str:
+    """
+    :param list_of_strings:
+    :return: alphabetical and uppercase string
+    """
     try:
-        return ''.join(sorted(list_of_strings))
+        return ''.join(sorted(list_of_strings)).upper()
     except IndexError:
         raise IndexError
 
 
 def _decimal_difference(start_time: str, stop_time: str) -> Decimal:
+    """
+    :param start_time: a timestamp
+    :param stop_time: a timestamp
+    :return: diff between timestamps
+    """
     ml.log_event('taking decimal difference of {} from {}'.format(stop_time, start_time))
     try:
         dec_start = Decimal(start_time)
@@ -116,6 +171,9 @@ def _decimal_difference(start_time: str, stop_time: str) -> Decimal:
 
 
 def _get_sha256_local() -> str:
+    """
+    :return: sha256 string calculated on local pc
+    """
     ml.log_event('get local sha256')
     if DEBUG:
         ml.log_event('debug mode, skipping local hash check')
@@ -127,6 +185,9 @@ def _get_sha256_local() -> str:
 
 
 def _get_sha256_remote() -> str:
+    """
+    :return: sha256 string fetched from remote url
+    """
     ml.log_event('get remote sha256')
     if DEBUG:
         ml.log_event('debug mode, skipping remote hash fetch')
@@ -144,6 +205,9 @@ def _get_sha256_remote() -> str:
 
 
 def _is_metadata_valid() -> bool:
+    """
+    :return: boolean, False if json data is out-of-date
+    """
     ml.log_event('check metadata validity')
     l_sha256 = _get_sha256_local()
     r_sha256 = _get_sha256_remote()
@@ -167,8 +231,8 @@ def _is_metadata_valid() -> bool:
 
 def _sanitize_colors(color_string: str) -> str:
     """
-    :param color_string: a string, potentially from a user
-    :return: remove non-alpha, remove duplicates, alphabetize, and uppercase
+    :param color_string: a string representing the colors of a card
+    :return: color_string -> remove non-alpha chars -> remove duplicates -> sort alphabetically -> uppercase
     """
     sanitized_string = \
         ''.join(sorted(''.join(set(''.join([letter for letter in color_string if letter.isalpha()]))).upper()))
