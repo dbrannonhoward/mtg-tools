@@ -257,6 +257,7 @@ def _timer_action(start_timer: bool, time_start=None, event=''):
         if time_start and time_stop:
             time_elapsed = time_stop - time_start
             ml.log_event('{} elapsed_time : {}'.format(event, time_elapsed))
+            return
         ml.log_event('timer started for {}'.format(event))
         return time_start
     except TypeError:

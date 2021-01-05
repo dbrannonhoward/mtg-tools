@@ -260,13 +260,19 @@ class CardEngine:
 
     def _debug(self) -> None:
         start_time = _timer_action(start_timer=True, event='debug CardEngine')
-        pass
+        start_time_color_combos = _timer_action(start_timer=True, event='fetch color combos unsorted')
+        all_color_combos = self._get_all_possible_color_combinations()
+        _timer_action(start_timer=False, time_start=start_time_color_combos, event='fetch color combos unsorted')
+        start_time_color_combos_sorted = _timer_action(start_timer=True, event='fetch color combos sorted')
+        all_color_combos_sorted = self._get_all_possible_color_combinations(sort_variations_before_return=True)
+        _timer_action(start_timer=False, time_start=start_time_color_combos_sorted, event='fetch color combos sorted')
         ml.log_event('end {} debug routine'.format(self.cname))
         _timer_action(start_timer=False, time_start=start_time, event='debug CardEngine')
         pass
 
 
 if __name__ == '__main__':
+    ml.log_event()
     ce = CardEngine(get_card_data=True,
                     get_unique_card_data=True,
                     debug=True)
