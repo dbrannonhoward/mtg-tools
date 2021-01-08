@@ -2,12 +2,13 @@
 *.json
 *.log
 *.pyc
+*.sh
 
 
 # files to ignore
 # .gitignore
-CONSTANTS.py
 minimalog
+URL.py
 
 
 # folders to ignore

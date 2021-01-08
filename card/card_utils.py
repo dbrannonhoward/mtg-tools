@@ -40,7 +40,9 @@ def fetch_cache() -> dict:
             with open(cache_src) as cs:
                 ml.log_event('success! probably!')
                 return loads(cs.read())
-        ml.log_event('cache {} not found, exiting python'.format(cache_src))
+        event = 'cache {} not found, exiting python'.format(cache_src)
+        print(event)
+        ml.log_event(event)
         exit()
     except OSError:
         raise OSError
